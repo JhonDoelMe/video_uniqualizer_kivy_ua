@@ -23,8 +23,8 @@ def run_app():
 
     # --- Завантаження стилів з файлу style.qss ---
     try:
-        style_file_path = project_root / "style.qss" # Формуємо шлях до файлу стилів
-        with open(style_file_path, "r", encoding="utf-8") as f: # Важливо вказати кодування
+        style_file_path = project_root / "style.qss" 
+        with open(style_file_path, "r", encoding="utf-8") as f: 
             app.setStyleSheet(f.read())
             print("Файл стилів style.qss успішно завантажено.")
     except FileNotFoundError:
@@ -34,7 +34,8 @@ def run_app():
     # --- Кінець завантаження стилів ---
 
     window = MainWindow() 
-    window.show() 
+    # window.show() # Старий спосіб показу вікна
+    window.showMaximized() # ! НОВИЙ СПОСІБ: Вікно відкриється на весь екран
     
     sys.exit(app.exec()) 
 

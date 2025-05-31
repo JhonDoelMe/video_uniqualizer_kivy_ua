@@ -4,39 +4,44 @@
     padding: dp(10)
     spacing: dp(10)
 
-    BoxLayout:
+    BoxLayout: # Секція вибору файлів
         size_hint_y: None
-        height: dp(40)
-        Label:
-            text: "Відеофайл:"
-            size_hint_x: 0.3
-        TextInput:
-            id: input_file_text
-            text: root.input_file_path
-            readonly: True 
-            size_hint_x: 0.55
-        Button:
-            text: "Огляд..."
-            size_hint_x: 0.15
-            on_press: root.select_video_file()
+        height: dp(80) # Трохи більше місця для двох рядків
+        orientation: 'vertical'
+        spacing: dp(5)
+        BoxLayout:
+            size_hint_y: None
+            height: dp(35)
+            Label:
+                text: "Відеофайл:"
+                size_hint_x: 0.3
+            TextInput:
+                id: input_file_text
+                text: root.input_file_path
+                readonly: True 
+                size_hint_x: 0.55
+            Button:
+                text: "Огляд..."
+                size_hint_x: 0.15
+                on_press: root.select_video_file()
 
-    BoxLayout:
-        size_hint_y: None
-        height: dp(40)
-        Label:
-            text: "Папка збер.:"
-            size_hint_x: 0.3
-        TextInput:
-            id: output_folder_text
-            text: root.output_folder_path
-            size_hint_x: 0.55
-        Button:
-            text: "Огляд..."
-            size_hint_x: 0.15
-            on_press: root.select_output_folder()
+        BoxLayout:
+            size_hint_y: None
+            height: dp(35)
+            Label:
+                text: "Папка збер.:"
+                size_hint_x: 0.3
+            TextInput:
+                id: output_folder_text
+                text: root.output_folder_path
+                size_hint_x: 0.55
+            Button:
+                text: "Огляд..."
+                size_hint_x: 0.15
+                on_press: root.select_output_folder()
 
-    ScrollView: # Область для опцій редагування
-        size_hint_y: 0.6
+    ScrollView: # Область для детальних опцій редагування
+        size_hint_y: 0.5 # Зменшимо, щоб було місце для пресетів
         GridLayout:
             cols: 2
             padding: dp(5)
@@ -44,14 +49,16 @@
             size_hint_y: None
             height: self.minimum_height 
 
+            # --- Опція: Змінити роздільну здатність ---
             Label:
-                text: "Змінити розмір:"
+                text: "Змінити роздільну здатність:"
                 halign: 'left'
                 valign: 'middle'
                 text_size: self.width, None 
                 size_hint_y: None
                 height: dp(30)
             CheckBox:
+                id: resize_checkbox
                 active: root.opt_resize_active
                 on_active: root.opt_resize_active = self.active
                 size_hint_x: None
@@ -61,39 +68,90 @@
             
             Label:
                 text: "Ширина (px):"
-                disabled: not root.opt_resize_active
+                disabled: not root.opt_resize_active 
                 size_hint_y: None
                 height: dp(30)
             TextInput:
+                id: resize_width_input 
                 text: root.opt_resize_width
                 on_text: root.opt_resize_width = self.text
-                input_filter: 'int'
-                disabled: not root.opt_resize_active
+                input_filter: 'int' 
+                disabled: not root.opt_resize_active 
                 size_hint_y: None
                 height: dp(30)
 
             Label:
                 text: "Висота (px):"
-                disabled: not root.opt_resize_active
+                disabled: not root.opt_resize_active 
                 size_hint_y: None
                 height: dp(30)
             TextInput:
+                id: resize_height_input
                 text: root.opt_resize_height
                 on_text: root.opt_resize_height = self.text
-                input_filter: 'int'
-                disabled: not root.opt_resize_active
+                input_filter: 'int' 
+                disabled: not root.opt_resize_active 
                 size_hint_y: None
                 height: dp(30)
             
-            # --- Додайте сюди інші опції редагування ---
+            # --- Місце для майбутніх детальних опцій ---
             Label:
-                text: "(Інші опції редагування тут)"
+                text: "(Інші детальні опції тут)"
                 size_hint_y: None
                 height: dp(30)
             BoxLayout: 
                 size_hint_y: None
                 height: dp(30)
 
+    # --- Нова секція для Пресетів ---
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint_y: None
+        height: dp(150) # Задамо фіксовану висоту для блоку пресетів
+        spacing: dp(5)
+        padding: dp(5)
+
+        Label:
+            text: "Швидкі пресети для платформ:"
+            size_hint_y: None
+            height: dp(25)
+            font_size: '16sp' # Трохи більший шрифт
+            halign: 'center'
+            valign: 'middle'
+
+        GridLayout:
+            cols: 3 # 3 кнопки в ряд
+            spacing: dp(10) # Відстань між кнопками
+            size_hint_y: None
+            height: dp(100) # Висота для двох рядків кнопок
+
+            Button:
+                text: "TikTok\nReels (9:16)" # \n для переносу рядка
+                on_press: root.apply_preset('tiktok_reels')
+                halign: 'center'
+            Button:
+                text: "Instagram\nПортрет (4:5)"
+                on_press: root.apply_preset('instagram_portrait')
+                halign: 'center'
+            Button:
+                text: "Instagram\nКвадрат (1:1)"
+                on_press: root.apply_preset('instagram_square')
+                halign: 'center'
+            Button:
+                text: "YouTube\n1080p (16:9)"
+                on_press: root.apply_preset('youtube_1080p')
+                halign: 'center'
+            Button:
+                text: "YouTube\n720p (16:9)"
+                on_press: root.apply_preset('youtube_720p')
+                halign: 'center'
+            Button:
+                text: "Скинути\nопції"
+                on_press: root.reset_all_options() # Новий метод для скидання
+                halign: 'center'
+                background_color: (0.8, 0.3, 0.3, 1) # Червонуватий для скидання
+
+    # --- Нижня частина: кнопка обробки, прогрес, статус ---
     Button:
         text: "Почати обробку"
         size_hint_y: None

@@ -1,7 +1,6 @@
-kivy[base,full] 
-# kivy_deps.gstreamer # або sdl2, angle - залежності для Kivy
-opencv-python
+PySide6
 moviepy
-numpy 
+opencv-python
+numpy
 Pillow 
-plyer
+# Pillow може бути потрібен для MoviePy або OpenCV, або для роботи з іконками в Qt

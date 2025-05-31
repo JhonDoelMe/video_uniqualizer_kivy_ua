@@ -1,0 +1,358 @@
+# ui/main_window.py
+import os
+from pathlib import Path
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, # Додано QGridLayout
+    QPushButton, QLabel, QLineEdit, QCheckBox, QProgressBar,
+    QFileDialog, QMessageBox, QSizePolicy, QSpacerItem
+)
+from PySide6.QtCore import Qt, Slot, Signal, QThread
+from PySide6.QtGui import QIcon
+
+from moviepy.editor import VideoFileClip
+from app_logic.video_processor import process_video_task 
+
+# --- Клас для фонової задачі ---
+class VideoProcessingThread(QThread):
+    status_updated = Signal(str)
+    progress_updated = Signal(int) 
+    processing_finished = Signal(bool, str) 
+
+    def __init__(self, input_path, output_folder, options):
+        super().__init__()
+        self.input_path = input_path
+        self.output_folder = output_folder
+        self.options = options
+        self.is_cancelled_flag = False
+
+    def run(self):
+        try:
+            def _emit_status(message):
+                if not self.is_cancelled_flag:
+                    self.status_updated.emit(message)
+            def _emit_progress(value_0_to_1):
+                if not self.is_cancelled_flag:
+                    self.progress_updated.emit(int(value_0_to_1 * 100))
+            def _check_if_cancelled():
+                return self.is_cancelled_flag
+
+            output_filepath = process_video_task(
+                self.input_path, self.output_folder, self.options,
+                _emit_status, _emit_progress, _check_if_cancelled
+            )
+
+            if self.is_cancelled_flag:
+                self.processing_finished.emit(False, "Обробку скасовано користувачем.")
+            elif output_filepath: 
+                self.processing_finished.emit(True, output_filepath)
+            else: 
+                self.processing_finished.emit(False, "Не вдалося обробити відео (невідома помилка в завданні).")
+        except Exception as e:
+            error_message = f"Помилка під час обробки у video_processor: {str(e)}"
+            self.status_updated.emit(error_message)
+            self.processing_finished.emit(False, error_message)
+            import traceback
+            traceback.print_exc()
+
+    def cancel(self):
+        self.status_updated.emit("Спроба скасувати обробку...")
+        self.is_cancelled_flag = True
+# --- Кінець класу VideoProcessingThread ---
+
+
+class MainWindow(QMainWindow):
+    # --- Словники для пресетів та значень за замовчуванням ---
+    PRESET_SETTINGS = {
+        'tiktok_reels': {'width': "1080", 'height': "1920", 'resize_active': True, 'name': "TikTok/Reels (1080x1920)"},
+        'instagram_portrait': {'width': "1080", 'height': "1350", 'resize_active': True, 'name': "Instagram Портрет (1080x1350)"},
+        'instagram_square': {'width': "1080", 'height': "1080", 'resize_active': True, 'name': "Instagram Квадрат (1080x1080)"},
+        'youtube_1080p': {'width': "1920", 'height': "1080", 'resize_active': True, 'name': "YouTube 1080p (1920x1080)"},
+        'youtube_720p': {'width': "1280", 'height': "720", 'resize_active': True, 'name': "YouTube 720p (1280x720)"},
+    }
+    DEFAULT_OPTIONS = {
+        'resize_active': False,
+        'width': "1280", # Стандартні значення для полів вводу
+        'height': "720",
+        # Тут будуть інші опції за замовчуванням, коли ми їх додамо
+    }
+    # --- ---
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Відео Редактор на PySide6")
+        self.setGeometry(100, 100, 800, 700) # Трохи збільшив висоту для пресетів
+
+        self.current_input_file = ""
+        self.current_output_folder = str(Path.home() / "Videos" / "Edited_Videos_PySide")
+        os.makedirs(self.current_output_folder, exist_ok=True)
+
+        self._init_ui()
+        self.reset_all_options(show_status=False) # Встановлюємо початкові значення для опцій
+        
+        self.processing_thread = None 
+
+    def _init_ui(self):
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        # --- 1. Секція вибору файлів ---
+        file_selection_layout = QHBoxLayout()
+        self.input_file_label = QLabel("Відеофайл: Не обрано")
+        self.input_file_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        btn_select_input = QPushButton("Обрати відео...")
+        btn_select_input.clicked.connect(self.select_input_file)
+        file_selection_layout.addWidget(self.input_file_label)
+        file_selection_layout.addWidget(btn_select_input)
+        main_layout.addLayout(file_selection_layout)
+
+        output_folder_layout = QHBoxLayout()
+        self.output_folder_label = QLabel(f"Папка збереження: {self.current_output_folder}")
+        self.output_folder_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        btn_select_output = QPushButton("Обрати папку...")
+        btn_select_output.clicked.connect(self.select_output_folder)
+        output_folder_layout.addWidget(self.output_folder_label)
+        output_folder_layout.addWidget(btn_select_output)
+        main_layout.addLayout(output_folder_layout)
+        
+        # --- 2. Секція медіа-інформації ---
+        self.media_info_group = QWidget() 
+        media_info_layout_main = QVBoxLayout(self.media_info_group) 
+        media_info_layout_main.setContentsMargins(0,5,0,5)
+        media_info_title = QLabel("--- Інформація про вихідний файл ---")
+        media_info_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        media_info_layout_main.addWidget(media_info_title)
+        media_info_grid = QVBoxLayout() 
+        self.info_filename_label = QLabel("Файл: -")
+        self.info_resolution_label = QLabel("Роздільна здатність: -")
+        self.info_duration_label = QLabel("Тривалість: -")
+        self.info_fps_label = QLabel("FPS: -")
+        media_info_grid.addWidget(self.info_filename_label)
+        media_info_grid.addWidget(self.info_resolution_label)
+        media_info_grid.addWidget(self.info_duration_label)
+        media_info_grid.addWidget(self.info_fps_label)
+        media_info_layout_main.addLayout(media_info_grid)
+        main_layout.addWidget(self.media_info_group)
+        
+        # --- 3. Секція пресетів ---
+        presets_group = QWidget() # Можна QGroupBox для рамки
+        presets_main_layout = QVBoxLayout(presets_group)
+        presets_main_layout.addWidget(QLabel("Швидкі пресети для платформ:"))
+        
+        presets_grid_layout = QGridLayout() # Використовуємо сітку для кнопок
+        
+        btn_tiktok = QPushButton("TikTok/Reels\n(1080x1920)")
+        btn_tiktok.clicked.connect(lambda: self.apply_preset('tiktok_reels'))
+        presets_grid_layout.addWidget(btn_tiktok, 0, 0) # Рядок 0, Колонка 0
+
+        btn_insta_portrait = QPushButton("Instagram Портрет\n(1080x1350)")
+        btn_insta_portrait.clicked.connect(lambda: self.apply_preset('instagram_portrait'))
+        presets_grid_layout.addWidget(btn_insta_portrait, 0, 1) # Рядок 0, Колонка 1
+
+        btn_insta_square = QPushButton("Instagram Квадрат\n(1080x1080)")
+        btn_insta_square.clicked.connect(lambda: self.apply_preset('instagram_square'))
+        presets_grid_layout.addWidget(btn_insta_square, 0, 2) # Рядок 0, Колонка 2
+
+        btn_yt_1080 = QPushButton("YouTube 1080p\n(1920x1080)")
+        btn_yt_1080.clicked.connect(lambda: self.apply_preset('youtube_1080p'))
+        presets_grid_layout.addWidget(btn_yt_1080, 1, 0) # Рядок 1, Колонка 0
+
+        btn_yt_720 = QPushButton("YouTube 720p\n(1280x720)")
+        btn_yt_720.clicked.connect(lambda: self.apply_preset('youtube_720p'))
+        presets_grid_layout.addWidget(btn_yt_720, 1, 1) # Рядок 1, Колонка 1
+        
+        btn_reset_options = QPushButton("Скинути опції")
+        btn_reset_options.clicked.connect(self.reset_all_options)
+        presets_grid_layout.addWidget(btn_reset_options, 1, 2) # Рядок 1, Колонка 2
+
+        presets_main_layout.addLayout(presets_grid_layout)
+        main_layout.addWidget(presets_group)
+
+        # --- 4. Секція детальних опцій ---
+        options_group = QWidget() # Можна QGroupBox
+        options_layout = QVBoxLayout(options_group)
+        self.cb_resize = QCheckBox("Змінити роздільну здатність")
+        self.cb_resize.setChecked(self.DEFAULT_OPTIONS['resize_active']) # Встановлюємо початковий стан
+        
+        resize_fields_layout = QHBoxLayout()
+        self.le_width = QLineEdit(self.DEFAULT_OPTIONS['width'])
+        self.le_height = QLineEdit(self.DEFAULT_OPTIONS['height'])
+        self.le_width.setEnabled(self.DEFAULT_OPTIONS['resize_active'])
+        self.le_height.setEnabled(self.DEFAULT_OPTIONS['resize_active'])
+        
+        self.cb_resize.toggled.connect(self.le_width.setEnabled)
+        self.cb_resize.toggled.connect(self.le_height.setEnabled)
+        
+        resize_fields_layout.addWidget(QLabel("Ширина:"))
+        resize_fields_layout.addWidget(self.le_width)
+        resize_fields_layout.addWidget(QLabel("Висота:"))
+        resize_fields_layout.addWidget(self.le_height)
+        
+        options_layout.addWidget(self.cb_resize)
+        options_layout.addLayout(resize_fields_layout)
+        # Тут будуть інші детальні опції
+        main_layout.addWidget(options_group)
+
+        main_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+
+        self.btn_process = QPushButton("Почати обробку")
+        self.btn_process.setFixedHeight(40) 
+        self.btn_process.clicked.connect(self.start_processing)
+        main_layout.addWidget(self.btn_process)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        main_layout.addWidget(self.progress_bar)
+
+        self.status_label = QLabel("Готово до роботи.")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.status_label)
+
+    @Slot()
+    def select_input_file(self):
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Обрати відеофайл для редагування",
+            self.current_input_file or str(Path.home()), 
+            "Відеофайли (*.mp4 *.avi *.mkv *.mov);;Всі файли (*)"
+        )
+        if filepath:
+            self.current_input_file = filepath
+            self.input_file_label.setText(f"Відеофайл: {os.path.basename(filepath)}")
+            self.info_filename_label.setText("Файл: -")
+            self.info_resolution_label.setText("Роздільна здатність: -")
+            self.info_duration_label.setText("Тривалість: -")
+            self.info_fps_label.setText("FPS: -")
+            self.status_label.setText(f"Обрано файл: {os.path.basename(filepath)}. Завантаження медіа-інфо...")
+            self.load_media_info(filepath) 
+
+    @Slot()
+    def select_output_folder(self):
+        foldername = QFileDialog.getExistingDirectory(
+            self, "Обрати папку для збереження результату",
+            self.current_output_folder or str(Path.home())
+        )
+        if foldername:
+            self.current_output_folder = foldername
+            self.output_folder_label.setText(f"Папка збереження: {foldername}")
+            self.status_label.setText(f"Папку для збереження змінено на: {foldername}")
+
+    def load_media_info(self, filepath):
+        self.status_label.setText(f"Завантаження інформації про {os.path.basename(filepath)}...")
+        QApplication.processEvents() 
+        try:
+            print(f"DEBUG: Завантаження медіа-інфо для: {filepath}")
+            clip = VideoFileClip(filepath)
+            self.info_filename_label.setText(f"Файл: {os.path.basename(filepath)}")
+            if clip.size: 
+                self.info_resolution_label.setText(f"Роздільна здатність: {clip.size[0]}x{clip.size[1]}")
+            else:
+                self.info_resolution_label.setText("Роздільна здатність: невідомо")
+            self.info_duration_label.setText(f"Тривалість: {clip.duration:.2f} сек")
+            self.info_fps_label.setText(f"FPS: {clip.fps:.2f}")
+            clip.close() 
+            self.status_label.setText(f"Медіа-інформацію для '{os.path.basename(filepath)}' завантажено.")
+            print(f"DEBUG: Медіа-інфо завантажено: Розмір={self.info_resolution_label.text()}, Трив={self.info_duration_label.text()}, FPS={self.info_fps_label.text()}")
+        except Exception as e:
+            self.info_filename_label.setText(f"Файл: {os.path.basename(filepath)}")
+            self.info_resolution_label.setText("Роздільна здатність: Помилка")
+            self.info_duration_label.setText("Тривалість: Помилка")
+            self.info_fps_label.setText("FPS: Помилка")
+            error_msg = f"Помилка завантаження медіа-інфо: {type(e).__name__} - {e}"
+            self.status_label.setText(error_msg)
+            print(f"ERROR: {error_msg}")
+            import traceback
+            traceback.print_exc() 
+
+    # --- Нові методи для пресетів ---
+    @Slot(str) # Вказуємо, що метод є слотом і приймає рядок
+    def apply_preset(self, preset_name):
+        preset_data = self.PRESET_SETTINGS.get(preset_name)
+        if not preset_data:
+            self.update_status_label(f"Помилка: Пресет '{preset_name}' не знайдено.")
+            print(f"DEBUG: Пресет '{preset_name}' не знайдено у PRESET_SETTINGS.")
+            return
+
+        # Застосовуємо налаштування зміни розміру
+        self.cb_resize.setChecked(preset_data.get('resize_active', self.DEFAULT_OPTIONS['resize_active']))
+        self.le_width.setText(preset_data.get('width', self.DEFAULT_OPTIONS['width']))
+        self.le_height.setText(preset_data.get('height', self.DEFAULT_OPTIONS['height']))
+        
+        # Тут будемо застосовувати інші налаштування для пресетів, коли додамо їх
+        # наприклад: self.some_other_checkbox.setChecked(preset_data.get('other_option_active', False))
+
+        applied_preset_name = preset_data.get('name', preset_name.replace("_", " ").title())
+        self.update_status_label(f"Застосовано пресет: {applied_preset_name}")
+        print(f"DEBUG: Застосовано пресет '{applied_preset_name}': W={self.le_width.text()}, H={self.le_height.text()}, Active={self.cb_resize.isChecked()}")
+
+    @Slot()
+    def reset_all_options(self, show_status=True): # show_status для можливості скидання без повідомлення
+        print("DEBUG: Скидання всіх опцій до значень за замовчуванням...")
+        self.cb_resize.setChecked(self.DEFAULT_OPTIONS['resize_active'])
+        self.le_width.setText(self.DEFAULT_OPTIONS['width'])
+        self.le_height.setText(self.DEFAULT_OPTIONS['height'])
+        
+        # Тут будемо скидати інші опції, коли вони з'являться
+        
+        if show_status:
+            self.update_status_label("Усі опції скинуто до значень за замовчуванням.")
+    # --- Кінець методів для пресетів ---
+
+    @Slot()
+    def start_processing(self):
+        if not self.current_input_file:
+            QMessageBox.warning(self, "Помилка", "Будь ласка, оберіть вхідний відеофайл.")
+            return
+        if not self.current_output_folder:
+            QMessageBox.warning(self, "Помилка", "Будь ласка, оберіть папку для збереження.")
+            return
+
+        options = {
+            "resize_active": self.cb_resize.isChecked(),
+            "width": self.le_width.text(),
+            "height": self.le_height.text(),
+            # Тут будуть збиратися інші опції
+        }
+
+        if self.processing_thread and self.processing_thread.isRunning():
+            self.processing_thread.cancel() 
+            if not self.processing_thread.wait(3000):
+                 print("DEBUG: Попередній потік не завершився вчасно після скасування.")
+                 # QMessageBox.warning(self, "Зайнято", "Попередній процес ще не завершено. Спробуйте пізніше.")
+                 # return 
+
+        self.processing_thread = VideoProcessingThread(
+            self.current_input_file, self.current_output_folder, options
+        )
+        self.processing_thread.status_updated.connect(self.update_status_label)
+        self.processing_thread.progress_updated.connect(self.update_progress_bar)
+        self.processing_thread.processing_finished.connect(self.on_processing_finished)
+        
+        self.btn_process.setEnabled(False) 
+        self.progress_bar.setValue(0) 
+        self.processing_thread.start() 
+
+    @Slot(str)
+    def update_status_label(self, message):
+        self.status_label.setText(message)
+
+    @Slot(int)
+    def update_progress_bar(self, value):
+        self.progress_bar.setValue(value)
+
+    @Slot(bool, str)
+    def on_processing_finished(self, success, message_or_filepath):
+        self.btn_process.setEnabled(True) 
+        self.progress_bar.setValue(100 if success else self.progress_bar.value()) 
+        if success:
+            QMessageBox.information(self, "Завершено", f"Обробку завершено!\nФайл збережено: {message_or_filepath}")
+        else:
+            QMessageBox.critical(self, "Помилка", f"Під час обробки сталася помилка:\n{message_or_filepath}")
+
+    def closeEvent(self, event):
+        if self.processing_thread and self.processing_thread.isRunning():
+            self.status_label.setText("Скасування обробки перед виходом...")
+            self.processing_thread.cancel()
+            if not self.processing_thread.wait(3000): 
+                print("Потік обробки не завершився вчасно при закритті вікна.")
+        event.accept()

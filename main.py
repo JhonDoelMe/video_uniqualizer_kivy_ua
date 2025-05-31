@@ -1,23 +1,42 @@
-# Головний скрипт, точка входу Kivy додатку
+# main.py (для PySide6)
 import sys
-print("Python, який виконується:", sys.executable)
-# Перевірка версії Python
-print("Версія Python:", sys.version)
 import os
-# Встановлення змінних середовища для Kivy до імпорту інших модулів Kivy (якщо потрібно)
-# Наприклад, для логування або графічного драйвера
-# os.environ['KIVY_LOG_LEVEL'] = 'debug'
+from pathlib import Path
 
-from kivy.app import App
-from ui.main_app import VideoEditorApp # Припускаємо, що клас App буде там
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt 
+from ui.main_window import MainWindow 
+
+# --- Додавання шляхів ---
+project_root = Path(__file__).resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+# --- Кінець додавання шляхів ---
 
 def run_app():
-    print(f"Запуск video_editor_kivy_ua Kivy App...")
-    # Тут можна додати логіку для пошуку FFmpeg, якщо це потрібно робити централізовано
-    # import app_logic.utils as utils
-    # utils.prepare_ffmpeg_path() # Приклад
-    app = VideoEditorApp()
-    app.run()
+    print(f"Запуск відеоредактора на PySide6...")
+    
+    app = QApplication(sys.argv) 
+    
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+
+    # --- Завантаження стилів з файлу style.qss ---
+    try:
+        style_file_path = project_root / "style.qss" # Формуємо шлях до файлу стилів
+        with open(style_file_path, "r", encoding="utf-8") as f: # Важливо вказати кодування
+            app.setStyleSheet(f.read())
+            print("Файл стилів style.qss успішно завантажено.")
+    except FileNotFoundError:
+        print("ПОПЕРЕДЖЕННЯ: Файл стилів style.qss не знайдено. Будуть використані стандартні стилі.")
+    except Exception as e:
+        print(f"ПОМИЛКА при завантаженні стилів: {e}")
+    # --- Кінець завантаження стилів ---
+
+    window = MainWindow() 
+    window.show() 
+    
+    sys.exit(app.exec()) 
 
 if __name__ == "__main__":
     run_app()

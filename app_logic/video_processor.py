@@ -1,110 +1,129 @@
-# Модуль з функціями обробки та редагування відео (MoviePy/OpenCV)
-from moviepy.editor import VideoFileClip # , vfx (для ефектів)
-# Якщо потрібні конкретні ефекти з vfx, розкоментуйте та імпортуйте їх:
-# from moviepy.video.fx import all as vfx
+# app_logic/video_processor.py
+from moviepy.editor import VideoFileClip
+# from moviepy.video.fx import all as vfx # Розкоментуйте, якщо потрібні ефекти
 
 import os
-import threading
-from kivy.clock import Clock # Для безпечного оновлення UI з іншого потоку
+import time # Для імітації прогресу та перевірки скасування
 
-# Ця функція викликатиметься з UI, швидше за все, в окремому потоці
-def process_video_task(input_path, output_folder, options, status_update_callback, progress_update_callback):
+# Тепер ця функція приймає check_if_cancelled_callback
+def process_video_task(input_path, output_folder, options, 
+                       status_callback, progress_callback, check_if_cancelled_callback):
     try:
-        # Перевірка вхідних шляхів
+        # Перевірка вхідних шляхів (залишається)
         if not input_path or not os.path.exists(input_path):
-            Clock.schedule_once(lambda dt: status_update_callback("Помилка: Вхідний файл не знайдено."))
-            return
-        if not output_folder or not os.path.isdir(output_folder): # Перевірка, чи output_folder є директорією
-            Clock.schedule_once(lambda dt: status_update_callback("Помилка: Папку для збереження не знайдено або вказано невірний шлях."))
-            return
+            status_callback("Помилка: Вхідний файл не знайдено.")
+            return None # Повертаємо None при помилці
+        if not output_folder or not os.path.isdir(output_folder):
+            status_callback("Помилка: Папку для збереження не знайдено або вказано невірний шлях.")
+            return None
 
-        Clock.schedule_once(lambda dt: status_update_callback(f"Завантаження відео: {os.path.basename(input_path)}"))
-        Clock.schedule_once(lambda dt: progress_update_callback(0.05)) # Невеликий прогрес на етапі завантаження
+        status_callback(f"Завантаження відео: {os.path.basename(input_path)}")
+        progress_callback(0.05) 
+
+        # Перевірка на скасування перед завантаженням кліпу
+        if check_if_cancelled_callback():
+            status_callback("Обробку скасовано користувачем.")
+            return None
 
         clip = VideoFileClip(input_path)
-        processed_clip = clip # Починаємо з оригінального кліпу
+        processed_clip = clip 
 
-        # --- Зміна роздільної здатності ---
+        # --- Зміна роздільної здатності (логіка залишається, але з перевірками на скасування) ---
         if options.get("resize_active"):
-            Clock.schedule_once(lambda dt: status_update_callback("Застосування зміни роздільної здатності..."))
+            status_callback("Застосування зміни роздільної здатності...")
             try:
-                # Отримуємо значення ширини та висоти з опцій
-                # Kivy StringProperty передає рядки, тому конвертуємо в int
-                # Додаємо перевірку, що значення не порожні перед конвертацією
                 width_str = options.get("width", "")
                 height_str = options.get("height", "")
 
                 if not width_str or not height_str:
-                    Clock.schedule_once(lambda dt: status_update_callback("Помилка: Ширина або висота для зміни розміру не вказані."))
-                    # Не перериваємо, можливо інші операції ще будуть
+                    status_callback("Помилка: Ширина або висота для зміни розміру не вказані.")
                 else:
                     width = int(width_str)
                     height = int(height_str)
-
                     if width > 0 and height > 0:
-                        # MoviePy очікує newsize=(ширина, висота) або newsize=масштаб
-                        # Також можна передати newsize=lambda t: (ширина_для_часу_t, висота_для_часу_t) для динаміки
-                        # або newsize={'width': W, 'height': H}
+                        # Перед довгою операцією перевіряємо скасування
+                        if check_if_cancelled_callback():
+                            status_callback("Обробку скасовано перед зміною розміру.")
+                            clip.close()
+                            return None
                         processed_clip = processed_clip.resize(newsize=(width, height))
-                        Clock.schedule_once(lambda dt: status_update_callback(f"Роздільну здатність змінено на {width}x{height}"))
+                        status_callback(f"Роздільну здатність змінено на {width}x{height}")
                     else:
-                        Clock.schedule_once(lambda dt: status_update_callback("Помилка: Ширина та висота для зміни розміру мають бути більшими за 0."))
+                        status_callback("Помилка: Ширина та висота для зміни розміру мають бути більшими за 0.")
             except ValueError:
-                Clock.schedule_once(lambda dt: status_update_callback("Помилка: Некоректні значення для ширини/висоти (мають бути цілими числами)."))
-                # Якщо помилка в конвертації, не продовжуємо з цією операцією
+                status_callback("Помилка: Некоректні значення для ширини/висоти (мають бути цілими числами).")
             except Exception as e:
-                Clock.schedule_once(lambda dt: status_update_callback(f"Помилка при зміні розміру: {str(e)}"))
+                status_callback(f"Помилка при зміні розміру: {str(e)}")
         
-        Clock.schedule_once(lambda dt: progress_update_callback(0.5)) # Припускаємо, що зміна розміру - це половина роботи
+        progress_callback(0.5) 
+        if check_if_cancelled_callback():
+            status_callback("Обробку скасовано після зміни розміру.")
+            if 'clip' in locals(): clip.close()
+            if 'processed_clip' in locals() and processed_clip != clip and hasattr(processed_clip, 'close'): processed_clip.close()
+            return None
+            
+        # --- Тут будуть інші операції редагування ---
+        # Наприклад, імітуємо ще якусь роботу
+        # for i in range(50, 81):
+        #     if check_if_cancelled_callback():
+        #         status_callback("Обробку скасовано під час додаткових операцій.")
+        #         if 'clip' in locals(): clip.close()
+        #         if 'processed_clip' in locals() and processed_clip != clip and hasattr(processed_clip, 'close'): processed_clip.close()
+        #         return None
+        #     time.sleep(0.02) # Імітація
+        #     progress_callback(i / 100.0)
+        #     status_callback(f"Виконується крок {i}/100...")
 
-        # --- Тут будуть інші операції редагування, якщо вони активні ---
-        # ... наприклад, обрізка, зміна швидкості тощо ...
 
-        # Формування імені вихідного файлу
         base_name = os.path.basename(input_path)
         name, ext = os.path.splitext(base_name)
-        # Додамо "_resized" до імені, якщо розмір було змінено, для наочності
-        suffix = "_edited"
-        if options.get("resize_active"): # Перевіряємо, чи була опція активна, а не чи вона вдалася
-            # Краще мати більш точний флаг, чи операція дійсно була застосована
-             # Але для простоти поки так
-            suffix += "_resized"
-
+        suffix = "_edited_pyside" # Новий суфікс
+        if options.get("resize_active"):
+             # Можна додати більш точну перевірку, чи операція дійсно була успішною
+            current_size = processed_clip.size
+            if str(current_size[0]) == options.get("width", "") and str(current_size[1]) == options.get("height", ""):
+                 suffix += "_resized"
+            
         output_file_name = f"{name}{suffix}{ext}"
         output_path = os.path.join(output_folder, output_file_name)
 
-        Clock.schedule_once(lambda dt: status_update_callback(f"Збереження відео в: {output_path}"))
+        status_callback(f"Збереження відео в: {output_path}")
         
-        # Запис обробленого кліпу у файл
-        # logger=None, щоб прибрати стандартний вивід прогресу MoviePy в консоль,
-        # оскільки ми використовуємо свій Kivy ProgressBar.
-        # threads=4 може прискорити запис, підберіть оптимальне значення для вашої системи.
+        # Перевірка на скасування перед записом файлу (тривала операція)
+        if check_if_cancelled_callback():
+            status_callback("Обробку скасовано перед збереженням файлу.")
+            if 'clip' in locals(): clip.close()
+            if 'processed_clip' in locals() and processed_clip != clip and hasattr(processed_clip, 'close'): processed_clip.close()
+            return None
+
+        # Для write_videofile можна також передати колбек для прогресу, якщо він підтримується,
+        # або обернути його для періодичної перевірки скасування.
+        # Поки що MoviePy не має зручного progress_callback для write_videofile, який би легко інтегрувався.
+        # Прогрес тут буде стрибком.
         processed_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", threads=4, logger=None)
 
-        Clock.schedule_once(lambda dt: progress_update_callback(1.0)) # Завершення прогресу
-        Clock.schedule_once(lambda dt: status_update_callback(f"Відео успішно збережено: {output_path}"))
+        # Якщо ми дійшли сюди і не було скасування:
+        if check_if_cancelled_callback(): # Остання перевірка, хоча малоймовірно після write_videofile
+            status_callback("Обробку скасовано одразу після збереження.")
+            # Файл вже збережено, але позначаємо як скасоване
+            if 'clip' in locals(): clip.close()
+            if 'processed_clip' in locals() and processed_clip != clip and hasattr(processed_clip, 'close'): processed_clip.close()
+            return None # Або output_path, якщо хочемо зберегти результат скасованої операції
+
+        progress_callback(1.0) 
+        status_callback(f"Відео успішно збережено: {output_path}")
+        return output_path # Повертаємо шлях до файлу при успіху
 
     except Exception as e:
-        # Загальна обробка помилок на випадок непередбачених ситуацій
-        Clock.schedule_once(lambda dt: status_update_callback(f"Загальна помилка обробки відео: {str(e)}"))
+        status_callback(f"Загальна помилка обробки відео в `process_video_task`: {str(e)}")
         import traceback
-        traceback.print_exc() # Для детальної помилки в консолі розробника
+        traceback.print_exc()
+        return None # Повертаємо None при помилці
     finally:
-        # Важливо закривати кліпи, щоб звільнити ресурси
-        if 'clip' in locals() and clip: # перевірка, чи змінна clip була створена
+        if 'clip' in locals():
             clip.close()
-        if 'processed_clip' in locals() and processed_clip and processed_clip != clip : # якщо processed_clip - це новий об'єкт
+        if 'processed_clip' in locals() and processed_clip != clip and hasattr(processed_clip, 'close'):
             try:
-                # Деякі ефекти MoviePy можуть повертати об'єкти, що не мають методу close,
-                # тому перевіряємо його наявність.
-                if hasattr(processed_clip, 'close') and callable(processed_clip.close):
-                    processed_clip.close()
+                processed_clip.close()
             except Exception as e_close:
-                # Можна залогувати, якщо закриття не вдалося, але не переривати роботу
-                print(f"Не вдалося закрити processed_clip: {e_close}")
-        
-        # Повідомлення про завершення (або помилку, якщо вона була останньою)
-        # Можливо, статус вже встановлено конкретною помилкою, тому не перезаписуємо його
-        # Clock.schedule_once(lambda dt: status_update_callback("Обробку завершено (або сталася помилка)."))
-        # Краще, якщо останнє повідомлення буде про успіх або конкретну помилку.
-        pass # Статус вже має бути встановлений вище
+                print(f"Не вдалося закрити processed_clip у finally: {e_close}")

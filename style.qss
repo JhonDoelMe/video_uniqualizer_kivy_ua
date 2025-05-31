@@ -1,0 +1,104 @@
+/* Загальні стилі для всіх віджетів */
+QWidget {
+    font-size: 10pt; /* Базовий розмір шрифту, можете змінити на '13px' або '14px' */
+    /* color: #333; */ /* Колір тексту за замовчуванням, якщо потрібно */
+}
+
+/* Стилі для QLabel */
+QLabel {
+    font-size: 10pt; /* Можна налаштувати окремо, якщо потрібно */
+    padding: 2px;
+}
+
+/* Стилі для QPushButton */
+QPushButton {
+    background-color: #5bc0de; /* Світло-синій */
+    color: white;
+    border-radius: 5px; /* Ось і заокруглені краї! */
+    padding: 6px 10px; /* Внутрішні відступи (верх/низ право/ліво) */
+    min-height: 26px;  /* Мінімальна висота кнопки */
+    font-size: 10pt;
+    border: 1px solid #46b8da; /* Тонка рамка */
+}
+
+QPushButton:hover {
+    background-color: #31b0d5; /* Трохи темніший при наведенні */
+    border-color: #269abc;
+}
+
+QPushButton:pressed {
+    background-color: #269abc; /* Ще темніший при натисканні */
+    border-color: #1b6d85;
+}
+
+QPushButton:disabled {
+    background-color: #d1d1d1; /* Сірий для неактивних кнопок */
+    color: #888888;
+    border-color: #bababa;
+}
+
+/* Стилі для QLineEdit (поля вводу) */
+QLineEdit {
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 10pt;
+}
+QLineEdit:disabled {
+    background-color: #eeeeee;
+}
+
+/* Стилі для QCheckBox */
+QCheckBox {
+    spacing: 5px; /* Відстань між галочкою та текстом */
+    font-size: 10pt;
+}
+QCheckBox::indicator { /* Сама галочка */
+    width: 16px;
+    height: 16px;
+}
+
+/* Стилі для QProgressBar */
+QProgressBar {
+    border: 1px solid grey;
+    border-radius: 5px;
+    text-align: center; /* Текст (відсотки) по центру */
+    font-size: 9pt;
+    height: 18px; /* Висота прогрес-бару */
+}
+QProgressBar::chunk { /* Заповнена частина прогрес-бару */
+    background-color: #5cb85c; /* Зелений */
+    border-radius: 4px;
+    /* width: 10px; */ /* Для створення пунктирного ефекту, якщо потрібно */
+}
+
+/* Можна додати стилі для QGroupBox, якщо будете їх використовувати */
+/*
+QGroupBox {
+    font-size: 11pt;
+    font-weight: bold;
+    margin-top: 10px;
+    border: 1px solid silver;
+    border-radius: 5px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px 0 5px;
+}
+*/
+
+/* Приклад стилізації конкретної кнопки за її objectName */
+/* Якщо ви встановите self.btn_process.setObjectName("ProcessButton") у Python: */
+/*
+QPushButton#ProcessButton {
+    background-color: #5cb85c; // Зелений
+    font-weight: bold;
+}
+QPushButton#ProcessButton:hover {
+    background-color: #4cae4c;
+}
+QPushButton#ProcessButton:pressed {
+    background-color: #398439;
+}
+*/

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QPushButton, QLabel, QLineEdit, QCheckBox, QProgressBar,
+    QPushButton, QLabel, QLineEdit, QCheckBox, QProgressBar, QComboBox,
     QFileDialog, QMessageBox, QSizePolicy, QSpacerItem, QGroupBox
 )
 from PySide6.QtCore import Qt, Slot, Signal, QThread
@@ -27,11 +27,9 @@ class VideoProcessingThread(QThread):
     def run(self):
         try:
             def _emit_status(message):
-                if not self.is_cancelled_flag:
-                    self.status_updated.emit(message)
+                if not self.is_cancelled_flag: self.status_updated.emit(message)
             def _emit_progress(value_0_to_1):
-                if not self.is_cancelled_flag:
-                    self.progress_updated.emit(int(value_0_to_1 * 100))
+                if not self.is_cancelled_flag: self.progress_updated.emit(int(value_0_to_1 * 100))
             def _check_if_cancelled():
                 return self.is_cancelled_flag
 
@@ -40,12 +38,9 @@ class VideoProcessingThread(QThread):
                 _emit_status, _emit_progress, _check_if_cancelled
             )
 
-            if self.is_cancelled_flag:
-                self.processing_finished.emit(False, "Обробку скасовано користувачем.")
-            elif output_filepath: 
-                self.processing_finished.emit(True, output_filepath)
-            else: 
-                self.processing_finished.emit(False, "Не вдалося обробити відео (невідома помилка в завданні).")
+            if self.is_cancelled_flag: self.processing_finished.emit(False, "Обробку скасовано користувачем.")
+            elif output_filepath: self.processing_finished.emit(True, output_filepath)
+            else: self.processing_finished.emit(False, "Не вдалося обробити відео (невідома помилка в завданні).")
         except Exception as e:
             error_message = f"Помилка під час обробки у video_processor: {str(e)}"
             self.status_updated.emit(error_message)
@@ -59,34 +54,27 @@ class VideoProcessingThread(QThread):
 
 class MainWindow(QMainWindow):
     PRESET_SETTINGS = {
-        'tiktok_reels': {'width': "1080", 'height': "1920", 'resize_active': True, 'bw_filter_active': False, 
-                         'uniek_filter_active': False, # Пресети поки не вмикають "Унік"
-                         'name': "TikTok/Reels (1080x1920)"},
-        'instagram_portrait': {'width': "1080", 'height': "1350", 'resize_active': True, 'bw_filter_active': False, 
-                               'uniek_filter_active': False,
-                               'name': "Instagram Портрет (1080x1350)"},
-        'instagram_square': {'width': "1080", 'height': "1080", 'resize_active': True, 'bw_filter_active': False, 
-                             'uniek_filter_active': False,
-                             'name': "Instagram Квадрат (1080x1080)"},
-        'youtube_1080p': {'width': "1920", 'height': "1080", 'resize_active': True, 'bw_filter_active': False, 
-                          'uniek_filter_active': False,
-                          'name': "YouTube 1080p (1920x1080)"},
-        'youtube_720p': {'width': "1280", 'height': "720", 'resize_active': True, 'bw_filter_active': False, 
-                         'uniek_filter_active': False,
-                         'name': "YouTube 720p (1280x720)"},
+        'tiktok_reels': {'width': "1080", 'height': "1920", 'resize_active': True, 'bw_filter_active': False, 'uniek_filter_active': False, 'name': "TikTok/Reels (1080x1920)"},
+        'instagram_portrait': {'width': "1080", 'height': "1350", 'resize_active': True, 'bw_filter_active': False, 'uniek_filter_active': False, 'name': "Instagram Портрет (1080x1350)"},
+        'instagram_square': {'width': "1080", 'height': "1080", 'resize_active': True, 'bw_filter_active': False, 'uniek_filter_active': False, 'name': "Instagram Квадрат (1080x1080)"},
+        'youtube_1080p': {'width': "1920", 'height': "1080", 'resize_active': True, 'bw_filter_active': False, 'uniek_filter_active': False, 'name': "YouTube 1080p (1920x1080)"},
+        'youtube_720p': {'width': "1280", 'height': "720", 'resize_active': True, 'bw_filter_active': False, 'uniek_filter_active': False, 'name': "YouTube 720p (1280x720)"},
     }
     DEFAULT_OPTIONS = {
-        'resize_active': False,
-        'width': "1280", 
-        'height': "720",
+        'resize_active': False, 'width': "1280", 'height': "720",
         'bw_filter_active': False,
-        'uniek_filter_active': False, # ! Нова опція "Унік" за замовчуванням
+        'uniek_filter_active': False,
+        'rotation_angle': 0, 
+        'flip_h_active': False, 
+        'flip_v_active': False, 
     }
+    ROTATION_MAP = { "Без повороту": 0, "90° за годинниковою": -90, "180°": 180, "90° проти годинникової": 90 }
+    ROTATION_MAP_INV = {v: k for k, v in ROTATION_MAP.items()}
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Відео Редактор на PySide6")
-        self.setGeometry(100, 100, 800, 780) # Ще трохи збільшив висоту для нової опції
+        self.setGeometry(100, 100, 900, 750) # Змінив ширину для горизонтального розміщення
 
         self.current_input_file = ""
         self.current_output_folder = str(Path.home() / "Videos" / "Edited_Videos_PySide")
@@ -94,13 +82,12 @@ class MainWindow(QMainWindow):
 
         self._init_ui()
         self.reset_all_options(show_status=False) 
-        
         self.processing_thread = None 
 
     def _init_ui(self):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget) # Головний макет - вертикальний
 
         # --- 1. Секція вибору файлів ---
         file_selection_layout = QHBoxLayout()
@@ -140,12 +127,15 @@ class MainWindow(QMainWindow):
         media_info_layout_main.addLayout(media_info_grid)
         main_layout.addWidget(self.media_info_group)
         
-        # --- 3. Секція пресетів ---
-        presets_group = QWidget() 
-        presets_main_layout = QVBoxLayout(presets_group)
-        presets_main_layout.addWidget(QLabel("Швидкі пресети для платформ:"))
+        # --- Горизонтальний макет для пресетів та детальних опцій ---
+        presets_and_options_HLayout = QHBoxLayout()
+
+        # --- 3. Секція пресетів (ліва частина) ---
+        presets_group = QGroupBox("Швидкі пресети") # Використовуємо QGroupBox
+        presets_main_layout = QVBoxLayout(presets_group) # Макет для вмісту QGroupBox
+        # presets_main_layout.addWidget(QLabel("Швидкі пресети для платформ:")) # Заголовок вже є у QGroupBox
+        
         presets_grid_layout = QGridLayout() 
-        # ... (кнопки пресетів залишаються без змін) ...
         btn_tiktok = QPushButton("TikTok/Reels\n(1080x1920)")
         btn_tiktok.clicked.connect(lambda: self.apply_preset('tiktok_reels'))
         presets_grid_layout.addWidget(btn_tiktok, 0, 0) 
@@ -165,20 +155,19 @@ class MainWindow(QMainWindow):
         btn_reset_options.clicked.connect(self.reset_all_options)
         presets_grid_layout.addWidget(btn_reset_options, 1, 2) 
         presets_main_layout.addLayout(presets_grid_layout)
-        main_layout.addWidget(presets_group)
+        presets_main_layout.addStretch(1) # Додаємо розтягувач, щоб кнопки не розтягувалися на всю висоту групи
+        
+        presets_and_options_HLayout.addWidget(presets_group) # Додаємо групу пресетів до горизонтального макету
 
-        # --- 4. Секція детальних опцій ---
-        options_group = QGroupBox("Детальні налаштування") 
+        # --- 4. Секція детальних опцій (права частина) ---
+        options_group = QGroupBox("Детальні налаштування / Фільтри") 
         options_layout = QVBoxLayout(options_group)
 
         # Опція: Змінити роздільну здатність
         self.cb_resize = QCheckBox("Змінити роздільну здатність")
-        self.cb_resize.setChecked(self.DEFAULT_OPTIONS['resize_active'])
         resize_fields_layout = QHBoxLayout()
-        self.le_width = QLineEdit(self.DEFAULT_OPTIONS['width'])
-        self.le_height = QLineEdit(self.DEFAULT_OPTIONS['height'])
-        self.le_width.setEnabled(self.DEFAULT_OPTIONS['resize_active'])
-        self.le_height.setEnabled(self.DEFAULT_OPTIONS['resize_active'])
+        self.le_width = QLineEdit() 
+        self.le_height = QLineEdit() 
         self.cb_resize.toggled.connect(self.le_width.setEnabled)
         self.cb_resize.toggled.connect(self.le_height.setEnabled)
         resize_fields_layout.addWidget(QLabel("Ширина:"))
@@ -190,17 +179,38 @@ class MainWindow(QMainWindow):
 
         # Опція: Чорно-білий фільтр
         self.cb_bw_filter = QCheckBox("Чорно-білий фільтр")
-        self.cb_bw_filter.setChecked(self.DEFAULT_OPTIONS['bw_filter_active'])
         options_layout.addWidget(self.cb_bw_filter)
 
-        # ! Нова опція: Унікалізація (комплекс фільтрів)
+        # Опція: Унікалізація (комплекс фільтрів)
         self.cb_uniek_filter = QCheckBox("Унік (комплекс фільтрів)")
-        self.cb_uniek_filter.setChecked(self.DEFAULT_OPTIONS['uniek_filter_active'])
         options_layout.addWidget(self.cb_uniek_filter)
-        
-        main_layout.addWidget(options_group)
 
-        main_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        # Секція: Трансформації кадру
+        transform_group = QGroupBox("Трансформації кадру")
+        transform_layout = QVBoxLayout(transform_group)
+        rotation_layout = QHBoxLayout()
+        rotation_layout.addWidget(QLabel("Поворот:"))
+        self.rotation_combobox = QComboBox()
+        self.rotation_combobox.addItems(list(self.ROTATION_MAP.keys()))
+        rotation_layout.addWidget(self.rotation_combobox)
+        transform_layout.addLayout(rotation_layout)
+        self.cb_flip_h = QCheckBox("Дзеркально по горизонталі")
+        transform_layout.addWidget(self.cb_flip_h)
+        self.cb_flip_v = QCheckBox("Дзеркально по вертикалі")
+        transform_layout.addWidget(self.cb_flip_v)
+        options_layout.addWidget(transform_group) 
+        options_layout.addStretch(1) # Додаємо розтягувач, щоб опції не розтягувалися на всю висоту групи
+        
+        presets_and_options_HLayout.addWidget(options_group) # Додаємо групу опцій до горизонтального макету
+        
+        # Можна встановити коефіцієнти розтягування для блоків
+        presets_and_options_HLayout.setStretchFactor(presets_group, 1) # Пресети займають 1 частину
+        presets_and_options_HLayout.setStretchFactor(options_group, 1) # Опції займають 1 частину (або 2 для більшого місця)
+
+        main_layout.addLayout(presets_and_options_HLayout) # Додаємо горизонтальний макет до головного
+
+        # --- Розтягувач та керуючі елементи внизу ---
+        # main_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)) # Цей розтягувач тепер менш потрібен тут
 
         self.btn_process = QPushButton("Почати обробку")
         self.btn_process.setFixedHeight(40) 
@@ -218,7 +228,6 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def select_input_file(self):
-        # ... (код не змінився) ...
         filepath, _ = QFileDialog.getOpenFileName(
             self, "Обрати відеофайл для редагування",
             self.current_input_file or str(Path.home()), 
@@ -236,7 +245,6 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def select_output_folder(self):
-        # ... (код не змінився) ...
         foldername = QFileDialog.getExistingDirectory(
             self, "Обрати папку для збереження результату",
             self.current_output_folder or str(Path.home())
@@ -247,7 +255,6 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"Папку для збереження змінено на: {foldername}")
 
     def load_media_info(self, filepath):
-        # ... (код не змінився) ...
         self.status_label.setText(f"Завантаження інформації про {os.path.basename(filepath)}...")
         QApplication.processEvents() 
         try:
@@ -285,25 +292,24 @@ class MainWindow(QMainWindow):
         self.le_width.setText(preset_data.get('width', self.DEFAULT_OPTIONS['width']))
         self.le_height.setText(preset_data.get('height', self.DEFAULT_OPTIONS['height']))
         self.cb_bw_filter.setChecked(preset_data.get('bw_filter_active', self.DEFAULT_OPTIONS['bw_filter_active']))
-        # ! Застосовуємо нову опцію "Унік" (пресети її поки вимикають)
         self.cb_uniek_filter.setChecked(preset_data.get('uniek_filter_active', self.DEFAULT_OPTIONS['uniek_filter_active']))
+        self.rotation_combobox.setCurrentText(self.ROTATION_MAP_INV[preset_data.get('rotation_angle', self.DEFAULT_OPTIONS['rotation_angle'])])
+        self.cb_flip_h.setChecked(preset_data.get('flip_h_active', self.DEFAULT_OPTIONS['flip_h_active']))
+        self.cb_flip_v.setChecked(preset_data.get('flip_v_active', self.DEFAULT_OPTIONS['flip_v_active']))
         
         applied_preset_name = preset_data.get('name', preset_name.replace("_", " ").title())
         self.update_status_label(f"Застосовано пресет: {applied_preset_name}")
-        # ... (DEBUG print можна розширити)
-        print(f"DEBUG: Застосовано пресет '{applied_preset_name}': ..., Uniek={self.cb_uniek_filter.isChecked()}")
-
 
     @Slot()
     def reset_all_options(self, show_status=True): 
-        print("DEBUG: Скидання всіх опцій до значень за замовчуванням...")
         self.cb_resize.setChecked(self.DEFAULT_OPTIONS['resize_active'])
         self.le_width.setText(self.DEFAULT_OPTIONS['width'])
         self.le_height.setText(self.DEFAULT_OPTIONS['height'])
         self.cb_bw_filter.setChecked(self.DEFAULT_OPTIONS['bw_filter_active'])
-        # ! Скидаємо нову опцію "Унік"
         self.cb_uniek_filter.setChecked(self.DEFAULT_OPTIONS['uniek_filter_active'])
-        
+        self.rotation_combobox.setCurrentText(self.ROTATION_MAP_INV[self.DEFAULT_OPTIONS['rotation_angle']])
+        self.cb_flip_h.setChecked(self.DEFAULT_OPTIONS['flip_h_active'])
+        self.cb_flip_v.setChecked(self.DEFAULT_OPTIONS['flip_v_active'])
         if show_status:
             self.update_status_label("Усі опції скинуто до значень за замовчуванням.")
     
@@ -321,7 +327,10 @@ class MainWindow(QMainWindow):
             "width": self.le_width.text(),
             "height": self.le_height.text(),
             "bw_filter_active": self.cb_bw_filter.isChecked(),
-            "uniek_filter_active": self.cb_uniek_filter.isChecked(), # ! Додаємо стан чекбокса "Унік"
+            "uniek_filter_active": self.cb_uniek_filter.isChecked(),
+            "rotation_angle": self.ROTATION_MAP[self.rotation_combobox.currentText()],
+            "flip_h_active": self.cb_flip_h.isChecked(),
+            "flip_v_active": self.cb_flip_v.isChecked(),
         }
 
         if self.processing_thread and self.processing_thread.isRunning():
@@ -340,7 +349,6 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0) 
         self.processing_thread.start() 
 
-    # ... (решта методів MainWindow без змін: update_status_label, update_progress_bar, on_processing_finished, closeEvent)
     @Slot(str)
     def update_status_label(self, message):
         self.status_label.setText(message)

@@ -1,0 +1,7 @@
+kivy[base,full] 
+# kivy_deps.gstreamer # або sdl2, angle - залежності для Kivy
+opencv-python
+moviepy
+numpy 
+Pillow 
+plyer

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+# *.spec # .spec файл зазвичай зберігається
+
+# Kivy
+.kivy/
+# *.kv~ # Резервні копії KV файлів
+# *.py~ # Резервні копії Python файлів
+*.kivy_ kivy_*.log
+
+# Buildozer
+.buildozer/ 
+bin/ 
+# buildozer.spec~ 
+
+# IDE / Editor specific files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store 
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+*.env 
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Папку output/ поки не ігноруємо, оскільки там є README.txt.
+# Якщо ви не хочете комітити вміст output/, додайте 'output/*' сюди.
+# ffmpeg_binaries/ також не ігнорується для прикладу з README.txt

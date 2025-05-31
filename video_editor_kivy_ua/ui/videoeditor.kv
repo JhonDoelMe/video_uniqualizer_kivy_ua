@@ -1,0 +1,118 @@
+# Kivy KV Language файл для VideoEditorApp
+<MainLayout>: 
+    orientation: 'vertical'
+    padding: dp(10)
+    spacing: dp(10)
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Label:
+            text: "Відеофайл:"
+            size_hint_x: 0.3
+        TextInput:
+            id: input_file_text
+            text: root.input_file_path
+            readonly: True 
+            size_hint_x: 0.55
+        Button:
+            text: "Огляд..."
+            size_hint_x: 0.15
+            on_press: root.select_video_file()
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(40)
+        Label:
+            text: "Папка збер.:"
+            size_hint_x: 0.3
+        TextInput:
+            id: output_folder_text
+            text: root.output_folder_path
+            size_hint_x: 0.55
+        Button:
+            text: "Огляд..."
+            size_hint_x: 0.15
+            on_press: root.select_output_folder()
+
+    ScrollView: # Область для опцій редагування
+        size_hint_y: 0.6
+        GridLayout:
+            cols: 2
+            padding: dp(5)
+            spacing: dp(5)
+            size_hint_y: None
+            height: self.minimum_height 
+
+            Label:
+                text: "Змінити розмір:"
+                halign: 'left'
+                valign: 'middle'
+                text_size: self.width, None 
+                size_hint_y: None
+                height: dp(30)
+            CheckBox:
+                active: root.opt_resize_active
+                on_active: root.opt_resize_active = self.active
+                size_hint_x: None
+                width: dp(48)
+                size_hint_y: None
+                height: dp(30)
+            
+            Label:
+                text: "Ширина (px):"
+                disabled: not root.opt_resize_active
+                size_hint_y: None
+                height: dp(30)
+            TextInput:
+                text: root.opt_resize_width
+                on_text: root.opt_resize_width = self.text
+                input_filter: 'int'
+                disabled: not root.opt_resize_active
+                size_hint_y: None
+                height: dp(30)
+
+            Label:
+                text: "Висота (px):"
+                disabled: not root.opt_resize_active
+                size_hint_y: None
+                height: dp(30)
+            TextInput:
+                text: root.opt_resize_height
+                on_text: root.opt_resize_height = self.text
+                input_filter: 'int'
+                disabled: not root.opt_resize_active
+                size_hint_y: None
+                height: dp(30)
+            
+            # --- Додайте сюди інші опції редагування ---
+            Label:
+                text: "(Інші опції редагування тут)"
+                size_hint_y: None
+                height: dp(30)
+            BoxLayout: 
+                size_hint_y: None
+                height: dp(30)
+
+    Button:
+        text: "Почати обробку"
+        size_hint_y: None
+        height: dp(50)
+        on_press: root.run_processing()
+        background_color: (0.2, 0.6, 0.2, 1)
+
+    ProgressBar:
+        id: progress_bar
+        value: root.progress_bar_value 
+        max: 1.0
+        size_hint_y: None
+        height: dp(20)
+
+    Label:
+        id: status_label
+        text: root.status_label_text
+        size_hint_y: None
+        height: dp(40)
+        text_size: self.width - dp(20), None 
+        halign: 'center'
+        valign: 'middle'
